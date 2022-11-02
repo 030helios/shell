@@ -170,18 +170,14 @@ void execute(char *line)
 
 void piper(char *line)
 {
-	// a copy of line for strtok
-	char tokenizedLine[100];
-	strcpy(tokenizedLine, line);
-	// tokenize with pipe
-	char *args[100] = {strtok(tokenizedLine, "|")};
-	// amount of commands
+	char *args[100] = {line};
 	int n = 0;
-	// since we are tokenizing the string with |
-	// the command after | will begin with a space
-	while (args[n] != NULL)
-		if (args[++n] = strtok(NULL, "|"))
-			++args[n];
+	// note that we are modifying line. This is basically handmade strtok.
+	while (args[++n] = strstr(&line[n], " | "))
+	{
+		*args[n] = '\0';
+		args[n] += 3;
+	}
 
 	// restore STDIO to its default after this
 	int cin = dup(0), cout = dup(1);
