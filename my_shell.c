@@ -176,27 +176,28 @@ void piper(char *line)
 	// tokenize with pipe
 	char *args[100] = {strtok(tokenizedLine, "|")};
 	// amount of commands
-	int n = 1;
-	for (; args[n] != NULL; ++n)
+	int n = 0;
+	while (args[n] != NULL)
 	{
 		// since we are tokenizing the string with |
 		// the command after | will begin with a space
-		if (args[n] = strtok(NULL, "|"))
+		if (args[++n] = strtok(NULL, "|"))
 			++args[n];
 	}
 	int cin = dup(0), cout = dup(1);
 	// the first and last pipe should be stdio
 	int fd[2 * (n - 1)];
 	int i = 0;
+	printf("%d\n", n);
 	for (; i < n; ++i)
+	{
 		if (i != (n - 1))
 		{
 			pipe(&fd[2 * i]);
-			dup2(fd[2 * i], STDOUT_FILENO);
+			dup2(fd[2 * i + 1], STDOUT_FILENO);
 			execute(args[i]);
-			dup2(fd[2 * i + 1], STDIN_FILENO);
-			close(fd[2 * i]);
-			close(fd[2 * i - 1]);
+			close(fd[2 * i + 1]);
+			dup2(fd[2 * i], STDIN_FILENO);
 		}
 		else
 		{
@@ -204,6 +205,9 @@ void piper(char *line)
 			execute(args[i]);
 			dup2(cin, 0);
 		}
+		if (i != 0)
+			close(fd[2 * i - 2]);
+	}
 }
 
 void replay(char *line)
