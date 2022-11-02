@@ -142,11 +142,11 @@ void execute(char *line)
 	strcpy(tokenizedLine, line);
 	// the arguments of line including operators
 	// no new strings are initialized
-	char *args[100] = {tokenizedLine};
-	args[1] = strtok(tokenizedLine, " ");
-	int i = 1;
-	while (args[i] != NULL)
-		args[++i] = strtok(NULL, " ");
+	char *args[100] = {NULL};
+	args[0] = strtok(tokenizedLine, " ");
+	int n = 0;
+	while (args[n] != NULL)
+		args[++n] = strtok(NULL, " ");
 
 	if (!strcmp(args[0], "help"))
 		help(line);
@@ -174,18 +174,21 @@ void piper(char *line)
 	char tokenizedLine[100];
 	strcpy(tokenizedLine, line);
 	// tokenize with pipe
-	char *args[100] = {tokenizedLine};
-	args[1] = strtok(tokenizedLine, "|");
+	char *args[100] = {strtok(tokenizedLine, "|")};
 	// amount of commands
-	int i = 0, n = 1;
-	while (args[n] != NULL)
-		args[++n] = strtok(NULL, " ");
-
+	int n = 1;
+	for (; args[n] != NULL; ++n)
+	{
+		// since we are tokenizing the string with |
+		// the command after | will begin with a space
+		if (args[n] = strtok(NULL, "|"))
+			++args[n];
+	}
 	int cin = dup(0), cout = dup(1);
 	// the first and last pipe should be stdio
-	int fd[2 * n];
+	int fd[2 * (n - 1)];
+	int i = 0;
 	for (; i < n; ++i)
-	{
 		if (i != (n - 1))
 		{
 			pipe(&fd[2 * i]);
@@ -201,7 +204,6 @@ void piper(char *line)
 			execute(args[i]);
 			dup2(cin, 0);
 		}
-	}
 }
 
 void replay(char *line)
