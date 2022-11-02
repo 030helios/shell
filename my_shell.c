@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <sys/wait.h>
 
 void help(char *line)
 {
@@ -134,22 +135,73 @@ void mypid(char *line)
 	}
 }
 
-void execute(char *cmd, char *line)
+void execute(char *line)
 {
-	strcpy(last16[end % 16], line);
-	end = (end + 1) % 16;
-	if (!strcmp(cmd, "help"))
+	// a copy of line for strtok
+	char tokenizedLine[100];
+	strcpy(tokenizedLine, line);
+	// the arguments of line including operators
+	// no new strings are initialized
+	char *args[100] = {tokenizedLine};
+	args[1] = strtok(tokenizedLine, " ");
+	int i = 1;
+	while (args[i] != NULL)
+		args[++i] = strtok(NULL, " ");
+
+	if (!strcmp(args[0], "help"))
 		help(line);
-	else if (!strcmp(cmd, "cd"))
+	else if (!strcmp(args[0], "cd"))
 		cd(line);
-	else if (!strcmp(cmd, "echo"))
+	else if (!strcmp(args[0], "echo"))
 		echo(line);
-	else if (!strcmp(cmd, "record"))
+	else if (!strcmp(args[0], "record"))
 		record(line);
-	else if (!strcmp(cmd, "mypid"))
+	else if (!strcmp(args[0], "mypid"))
 		mypid(line);
 	else
-		printf("%s", line);
+	{
+		int pid;
+		if (pid = fork())
+			waitpid(pid, NULL, 0);
+		else
+			execvp(args[0], args);
+	}
+}
+
+void piper(char *line)
+{
+	// a copy of line for strtok
+	char tokenizedLine[100];
+	strcpy(tokenizedLine, line);
+	// tokenize with pipe
+	char *args[100] = {tokenizedLine};
+	args[1] = strtok(tokenizedLine, "|");
+	// amount of commands
+	int i = 0, n = 1;
+	while (args[n] != NULL)
+		args[++n] = strtok(NULL, " ");
+
+	int cin = dup(0), cout = dup(1);
+	// the first and last pipe should be stdio
+	int fd[2 * n];
+	for (; i < n; ++i)
+	{
+		if (i != (n - 1))
+		{
+			pipe(&fd[2 * i]);
+			dup2(fd[2 * i], STDOUT_FILENO);
+			execute(args[i]);
+			dup2(fd[2 * i + 1], STDIN_FILENO);
+			close(fd[2 * i]);
+			close(fd[2 * i - 1]);
+		}
+		else
+		{
+			dup2(cout, 1);
+			execute(args[i]);
+			dup2(cin, 0);
+		}
+	}
 }
 
 void replay(char *line)
@@ -159,12 +211,7 @@ void replay(char *line)
 	--id;
 	if (id > -1 && id < 16 && id < end)
 		if (!isBlank(last16[id]))
-		{
-			char cmd[100];
-			sscanf(last16[id], "%s", cmd);
-			execute(cmd, last16[id]);
-			return;
-		}
+			return execute(last16[id]);
 	printf("wrong args\n");
 }
 int main()
@@ -186,14 +233,20 @@ int main()
 		if (isBlank(line) == 1)
 			continue;
 
-		char cmd[7];
+		char cmd[100];
 		sscanf(line, "%s", cmd);
+
 		if (!strcmp(cmd, "replay"))
 			replay(line);
 		else if (!strcmp(cmd, "exit"))
 			return printf("bye\n");
 		else
-			execute(cmd, line);
+		{
+			// record
+			strcpy(last16[end % 16], line);
+			end = (end + 1) % 16;
+			piper(line);
+		}
 	}
 	return 0;
 }
