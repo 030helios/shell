@@ -177,20 +177,19 @@ void piper(char *line)
 	char *args[100] = {strtok(tokenizedLine, "|")};
 	// amount of commands
 	int n = 0;
+	// since we are tokenizing the string with |
+	// the command after | will begin with a space
 	while (args[n] != NULL)
-	{
-		// since we are tokenizing the string with |
-		// the command after | will begin with a space
 		if (args[++n] = strtok(NULL, "|"))
 			++args[n];
-	}
+
+	// restore STDIO to its default after this
 	int cin = dup(0), cout = dup(1);
-	// the first and last pipe should be stdio
-	int fd[2 * (n - 1)];
-	int i = 0;
-	printf("%d\n", n);
+	int i = 0, fd[2 * (n - 1)];
 	for (; i < n; ++i)
 	{
+		// make two pipe if this command is not the last one
+		// the ith command generates fd[2*i] and fd[2*i+1]
 		if (i != (n - 1))
 		{
 			pipe(&fd[2 * i]);
@@ -205,6 +204,7 @@ void piper(char *line)
 			execute(args[i]);
 			dup2(cin, 0);
 		}
+		// the first command doesn't read from a pipe, so there's nothing to close
 		if (i != 0)
 			close(fd[2 * i - 2]);
 	}
