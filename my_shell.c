@@ -207,6 +207,22 @@ void redirector(void (*fptr)(char *), char *line, int in, int out)
 	close(out);
 }
 
+void switcher(void (*exec)(), char *line, int in, int out)
+{
+	if (isCmd(line, "help"))
+		exec(help, line, in, out);
+	else if (isCmd(line, "cd"))
+		exec(cd, line, in, out);
+	else if (isCmd(line, "echo"))
+		exec(echo, line, in, out);
+	else if (isCmd(line, "record"))
+		exec(record, line, in, out);
+	else if (isCmd(line, "mypid"))
+		exec(mypid, line, in, out);
+	else
+		exec(execCmd, line, in, out);
+}
+
 void piper(char *line)
 {
 	int background = line[strlen(line) - 1] == '&';
@@ -234,36 +250,13 @@ void piper(char *line)
 	fd[2 * n + 1] = dup(1);
 
 	for (i = 0; i < n; ++i)
-		if (i != (n - 1) && i)
-		{
-			if (isCmd(args[i], "help"))
-				execute(help, args[i], fd[2 * i], fd[2 * i + 3]);
-			else if (isCmd(args[i], "cd"))
-				execute(cd, args[i], fd[2 * i], fd[2 * i + 3]);
-			else if (isCmd(args[i], "echo"))
-				execute(echo, args[i], fd[2 * i], fd[2 * i + 3]);
-			else if (isCmd(args[i], "record"))
-				execute(record, args[i], fd[2 * i], fd[2 * i + 3]);
-			else if (isCmd(args[i], "mypid"))
-				execute(mypid, args[i], fd[2 * i], fd[2 * i + 3]);
+		if (i != (n - 1))
+			if (i)
+				switcher(execute, args[i], fd[2 * i], fd[2 * i + 3]);
 			else
-				execute(execCmd, args[i], fd[2 * i], fd[2 * i + 3]);
-		}
+				switcher(redirector, args[i], fd[2 * i], fd[2 * i + 3]);
 		else
-		{
-			if (isCmd(args[i], "help"))
-				redirector(help, args[i], fd[2 * i], fd[2 * i + 3]);
-			else if (isCmd(args[i], "cd"))
-				redirector(cd, args[i], fd[2 * i], fd[2 * i + 3]);
-			else if (isCmd(args[i], "echo"))
-				redirector(echo, args[i], fd[2 * i], fd[2 * i + 3]);
-			else if (isCmd(args[i], "record"))
-				redirector(record, args[i], fd[2 * i], fd[2 * i + 3]);
-			else if (isCmd(args[i], "mypid"))
-				redirector(mypid, args[i], fd[2 * i], fd[2 * i + 3]);
-			else
-				redirector(execCmd, args[i], fd[2 * i], fd[2 * i + 3]);
-		}
+			switcher(redirector, args[i], fd[2 * i], fd[2 * i + 3]);
 	dup2(cin, STDIN_FILENO);
 }
 
