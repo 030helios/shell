@@ -10,6 +10,9 @@
 #include <dirent.h>
 #include <sys/wait.h>
 
+// Terminate if this process is forked
+int isOriginalProcess = 1;
+
 void help(char *line)
 {
 	printf("----------------------------------------------------------\n\
@@ -135,6 +138,18 @@ void mypid(char *line)
 	}
 }
 
+int isCmd(char *line, char *type)
+{
+	char cmd[100];
+	sscanf(line, "%s", cmd);
+	return !strcmp(cmd, type);
+}
+
+int isBuiltin(char *line)
+{
+	return isCmd(line, "help") || isCmd(line, "cd") || isCmd(line, "echo") || isCmd(line, "record") || isCmd(line, "mypid");
+}
+
 void execute(char *line)
 {
 	// a copy of line for strtok
@@ -248,28 +263,21 @@ int main()
 
 	printf("========\nMY SHELL\n========\n");
 	char line[100];
-	while (1)
+	while (isOriginalProcess)
 	{
 		printf(">>> $");
 		fgets(line, 100, stdin);
-		line[strlen(line) - 1] = '\0';
+		while (isspace(line[strlen(line) - 1]))
+			line[strlen(line) - 1] = '\0';
 		if (isBlank(line) == 1)
 			continue;
 
-		char cmd[100];
-		sscanf(line, "%s", cmd);
-
-		if (!strcmp(cmd, "replay"))
+		if (isCmd(line, "replay"))
 			replay(line);
-		else if (!strcmp(cmd, "exit"))
+		else if (isCmd(line, "exit"))
 			return printf("bye\n");
 		else
-		{
-			// record
-			strcpy(last16[end % 16], line);
-			end = (end + 1) % 16;
 			piper(line);
-		}
 	}
 	return 0;
 }
