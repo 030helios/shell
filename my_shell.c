@@ -198,6 +198,7 @@ int runBuiltin(char *args[])
         return record(args);
     else if (!strcmp(args[0], "mypid"))
         return mypid(args);
+    return 0;
 }
 
 /**
