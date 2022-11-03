@@ -224,64 +224,47 @@ void piper(char *line)
 		args[n] += 3;
 	}
 
-	// restore STDIO to its default after this
-	int cin = dup(0), cout = dup(1);
-	int i = 0, fd[2 * (n - 1)];
-	// the ith command pipes fd[2*i] and fd[2*i+1]
-	for (; i < n - 1; ++i)
+	// restore STDIN to its default after this
+	int cin = dup(0);
+	// the ith command reads from 2*i, writes to 2*i+3
+	int i = 1, fd[2 * n + 2];
+	for (; i < n; ++i)
 		pipe(&fd[2 * i]);
+	fd[0] = STDIN_FILENO;
+	fd[2 * n + 1] = dup(1);
 
 	for (i = 0; i < n; ++i)
-		if (i != (n - 1))
-				{
-			// try redirect if we are processing args[0]
-			if (i)
-			{
-				if (isCmd(args[i], "help"))
-					execute(help, args[i], fd[2 * i - 2], fd[2 * i + 1]);
-				else if (isCmd(args[i], "cd"))
-					execute(cd, args[i], fd[2 * i - 2], fd[2 * i + 1]);
-				else if (isCmd(args[i], "echo"))
-					execute(echo, args[i], fd[2 * i - 2], fd[2 * i + 1]);
-				else if (isCmd(args[i], "record"))
-					execute(record, args[i], fd[2 * i - 2], fd[2 * i + 1]);
-				else if (isCmd(args[i], "mypid"))
-					execute(mypid, args[i], fd[2 * i - 2], fd[2 * i + 1]);
-				else
-					execute(execCmd, args[i], fd[2 * i - 2], fd[2 * i + 1]);
-				}
-				else
-			{
-				if (isCmd(args[i], "help"))
-					redirector(help, args[i], 0, fd[2 * i + 1]);
-				else if (isCmd(args[i], "cd"))
-					redirector(cd, args[i], 0, fd[2 * i + 1]);
-				else if (isCmd(args[i], "echo"))
-					redirector(echo, args[i], 0, fd[2 * i + 1]);
-				else if (isCmd(args[i], "record"))
-					redirector(record, args[i], 0, fd[2 * i + 1]);
-				else if (isCmd(args[i], "mypid"))
-					redirector(mypid, args[i], 0, fd[2 * i + 1]);
-			else
-					redirector(execCmd, args[i], 0, fd[2 * i + 1]);
-		}
-		}
-		else // the last command restores STDIO to its default
+		if (i != (n - 1) && i)
 		{
-		if (isCmd(args[i], "help"))
-				redirector(help, args[i], fd[2 * i - 2], cout);
-		else if (isCmd(args[i], "cd"))
-				redirector(cd, args[i], fd[2 * i - 2], cout);
-		else if (isCmd(args[i], "echo"))
-				redirector(echo, args[i], fd[2 * i - 2], cout);
-		else if (isCmd(args[i], "record"))
-				redirector(record, args[i], fd[2 * i - 2], cout);
-		else if (isCmd(args[i], "mypid"))
-				redirector(mypid, args[i], fd[2 * i - 2], cout);
+			if (isCmd(args[i], "help"))
+				execute(help, args[i], fd[2 * i], fd[2 * i + 3]);
+			else if (isCmd(args[i], "cd"))
+				execute(cd, args[i], fd[2 * i], fd[2 * i + 3]);
+			else if (isCmd(args[i], "echo"))
+				execute(echo, args[i], fd[2 * i], fd[2 * i + 3]);
+			else if (isCmd(args[i], "record"))
+				execute(record, args[i], fd[2 * i], fd[2 * i + 3]);
+			else if (isCmd(args[i], "mypid"))
+				execute(mypid, args[i], fd[2 * i], fd[2 * i + 3]);
 			else
-				redirector(execCmd, args[i], fd[2 * i - 2], cout);
-			dup2(cin, STDIN_FILENO);
+				execute(execCmd, args[i], fd[2 * i], fd[2 * i + 3]);
 		}
+		else
+		{
+			if (isCmd(args[i], "help"))
+				redirector(help, args[i], fd[2 * i], fd[2 * i + 3]);
+			else if (isCmd(args[i], "cd"))
+				redirector(cd, args[i], fd[2 * i], fd[2 * i + 3]);
+			else if (isCmd(args[i], "echo"))
+				redirector(echo, args[i], fd[2 * i], fd[2 * i + 3]);
+			else if (isCmd(args[i], "record"))
+				redirector(record, args[i], fd[2 * i], fd[2 * i + 3]);
+			else if (isCmd(args[i], "mypid"))
+				redirector(mypid, args[i], fd[2 * i], fd[2 * i + 3]);
+			else
+				redirector(execCmd, args[i], fd[2 * i], fd[2 * i + 3]);
+		}
+	dup2(cin, STDIN_FILENO);
 }
 
 void replay(char *line)
