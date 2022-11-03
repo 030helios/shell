@@ -221,25 +221,28 @@ void piper(char *line)
 	// restore STDIO to its default after this
 	int cin = dup(0), cout = dup(1);
 	int i = 0, fd[2 * (n - 1)];
-	for (; i < n; ++i)
-		if (i != (n - 1)) // the ith command pipes fd[2*i] and fd[2*i+1]
+	// the ith command pipes fd[2*i] and fd[2*i+1]
+	for (; i < n - 1; ++i)
+		pipe(&fd[2 * i]);
+
+	for (i = 0; i < n; ++i)
+		if (i != (n - 1))
 		{
-			pipe(&fd[2 * i]);
 			// try redirect if we are processing args[0]
 			if (i)
 			{
 				if (isCmd(args[i], "help"))
-					execute(help, args[i], 0, fd[2 * i + 1]);
+					execute(help, args[i], fd[2 * i - 2], fd[2 * i + 1]);
 				else if (isCmd(args[i], "cd"))
-					execute(cd, args[i], 0, fd[2 * i + 1]);
+					execute(cd, args[i], fd[2 * i - 2], fd[2 * i + 1]);
 				else if (isCmd(args[i], "echo"))
-					execute(echo, args[i], 0, fd[2 * i + 1]);
+					execute(echo, args[i], fd[2 * i - 2], fd[2 * i + 1]);
 				else if (isCmd(args[i], "record"))
-					execute(record, args[i], 0, fd[2 * i + 1]);
+					execute(record, args[i], fd[2 * i - 2], fd[2 * i + 1]);
 				else if (isCmd(args[i], "mypid"))
-					execute(mypid, args[i], 0, fd[2 * i + 1]);
+					execute(mypid, args[i], fd[2 * i - 2], fd[2 * i + 1]);
 				else
-					execute(execCmd, args[i], 0, fd[2 * i + 1]);
+					execute(execCmd, args[i], fd[2 * i - 2], fd[2 * i + 1]);
 			}
 			else
 			{
@@ -256,23 +259,21 @@ void piper(char *line)
 				else
 					redirector(execCmd, args[i], 0, fd[2 * i + 1]);
 			}
-			dup2(fd[2 * i], STDIN_FILENO);
 		}
 		else // the last command restores STDIO to its default
 		{
-			dup2(cout, STDOUT_FILENO);
 			if (isCmd(args[i], "help"))
-				redirector(help, args[i], 0, fd[2 * i + 1]);
+				redirector(help, args[i], fd[2 * i - 2], cout);
 			else if (isCmd(args[i], "cd"))
-				redirector(cd, args[i], 0, fd[2 * i + 1]);
+				redirector(cd, args[i], fd[2 * i - 2], cout);
 			else if (isCmd(args[i], "echo"))
-				redirector(echo, args[i], 0, fd[2 * i + 1]);
+				redirector(echo, args[i], fd[2 * i - 2], cout);
 			else if (isCmd(args[i], "record"))
-				redirector(record, args[i], 0, fd[2 * i + 1]);
+				redirector(record, args[i], fd[2 * i - 2], cout);
 			else if (isCmd(args[i], "mypid"))
-				redirector(mypid, args[i], 0, fd[2 * i + 1]);
+				redirector(mypid, args[i], fd[2 * i - 2], cout);
 			else
-				redirector(execCmd, args[i], 0, fd[2 * i + 1]);
+				redirector(execCmd, args[i], fd[2 * i - 2], cout);
 			dup2(cin, STDIN_FILENO);
 		}
 }
