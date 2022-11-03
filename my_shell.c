@@ -1,20 +1,22 @@
-#ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200809L
-#endif
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 #include <sys/types.h>
-#include <dirent.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <dirent.h>
+
+#define MAX_LINE 1024 // The maximum length command
 
 int background = 0;
 
-int help(char *line)
+int help(char *args[])
 {
-	return printf("----------------------------------------------------------\n\
+    return printf("----------------------------------------------------------\n\
 			my little shell\n\
 			Type program names and arguments and hit enter\n\n\
 			The following are built in:\n\
@@ -29,281 +31,331 @@ int help(char *line)
 			----------------------------------------------------------\n\
 			");
 }
-int cd(char *line)
+int cd(char *args[])
 {
-	char dir[100];
-	sscanf(&line[3], "%s", dir);
-	return chdir(dir);
+    if (args[1])
+        return chdir(args[1]);
+    else
+        return printf("cd error");
 }
-int echo(char *line)
+int echo(char *args[])
 {
-	char flag[100];
-	sscanf(&line[5], "%s", flag);
-	if (!strcmp(flag, "-n"))
-		printf("%s", &line[8]);
-	else
-		printf("%s\n", &line[5]);
-	return 0;
+    int i = 1;
+    if (!strcmp(args[1], "-n"))
+        i = 2;
+    for (; args[i]; ++i)
+    {
+        printf("%s", args[i]);
+        if (args[i + 1])
+            printf(" ");
+    }
+    if (strcmp(args[1], "-n"))
+        printf("\n");
+    return 0;
 }
 int isBlank(char *line)
 {
-	char *ch;
-	for (ch = line; *ch != '\0'; ++ch)
-		if (!isspace(*ch))
-			return 0;
-	return 1;
+    char *ch;
+    for (ch = line; *ch != '\0'; ++ch)
+        if (!isspace(*ch))
+            return 0;
+    return 1;
 }
 int end = 0;
 char *last16[16];
-int record(char *line)
+int record(char *args[])
 {
-	printf("history cmd:\n");
-	int i = end;
-	int j = 1;
-	for (; i < end + 16; ++i)
-		if (!isBlank(last16[i % 16]))
-			printf("%d: %s\n", j++, last16[i % 16]);
-	return 0;
+    printf("history cmd:\n");
+    int i = end;
+    int j = 1;
+    for (; i < end + 16; ++i)
+        if (!isBlank(last16[i % 16]))
+            printf("%d: %s\n", j++, last16[i % 16]);
+    return 0;
 }
 int ppid(int pid)
 {
-	int ppid;
-	char buf[100];
-	char procname[32]; // Holds /proc/4294967296/status\0
-	FILE *fp;
-	snprintf(procname, sizeof(procname), "/proc/%u/status", pid);
-	fp = fopen(procname, "r");
-	if (fp != NULL)
-	{
-		size_t ret = fread(buf, sizeof(char), 100 - 1, fp);
-		if (!ret)
-		{
-			return 0;
-		}
-		else
-		{
-			buf[ret++] = '\0'; // Terminate it.
-		}
-	}
-	fclose(fp);
-	char *ppid_loc = strstr(buf, "\nPPid:");
-	if (ppid_loc)
-	{
-		ppid = sscanf(ppid_loc, "\nPPid:%d", &ppid);
-		if (!ppid || ppid == EOF)
-		{
-			return 0;
-		}
-		return ppid;
-	}
-	else
-	{
-		return 0;
-	}
+    int ppid;
+    char buf[100];
+    char procname[32]; // Holds /proc/4294967296/status\0
+    FILE *fp;
+    snprintf(procname, sizeof(procname), "/proc/%u/status", pid);
+    fp = fopen(procname, "r");
+    if (fp != NULL)
+    {
+        size_t ret = fread(buf, sizeof(char), 100 - 1, fp);
+        if (!ret)
+        {
+            return 0;
+        }
+        else
+        {
+            buf[ret++] = '\0'; // Terminate it.
+        }
+    }
+    fclose(fp);
+    char *ppid_loc = strstr(buf, "\nPPid:");
+    if (ppid_loc)
+    {
+        ppid = sscanf(ppid_loc, "\nPPid:%d", &ppid);
+        if (!ppid || ppid == EOF)
+        {
+            return 0;
+        }
+        return ppid;
+    }
+    else
+    {
+        return 0;
+    }
 }
 int isnumber(char *p)
 {
-	for (; *p; p++)
-		if (!isdigit(*p))
-			return 0;
-	return 1;
+    for (; *p; p++)
+        if (!isdigit(*p))
+            return 0;
+    return 1;
 }
-int mypid(char *line)
+int mypid(char *args[])
 {
-	char flag[100];
-	sscanf(&line[5], "%s", flag);
-	if (!strcmp(flag, "-i"))
-		printf("%d\n", getpid());
-	else
-	{
-		int id;
-		sscanf(&line[9], "%d", &id);
-		if (!strcmp(flag, "-p"))
-			printf("%d\n", ppid(id));
-		else if (!strcmp(flag, "-c"))
-		{
-			struct dirent *entry;
-			DIR *procdir = opendir("/proc");
-			// Iterate through all files and directories of /proc.
-			while ((entry = readdir(procdir)))
-				if (isnumber(entry->d_name))
-				{
-					int pid;
-					sscanf(entry->d_name, "%d", &pid);
-					if (id == ppid(pid))
-						printf("%d\n", pid);
-				}
-			closedir(procdir);
-		}
-	}
-	return 0;
+    char *flag = args[1];
+    if (!strcmp(flag, "-i"))
+        printf("%d\n", getpid());
+    else
+    {
+        int id = atoi(args[2]);
+        if (!strcmp(flag, "-p"))
+            printf("%d\n", ppid(id));
+        else if (!strcmp(flag, "-c"))
+        {
+            struct dirent *entry;
+            DIR *procdir = opendir("/proc");
+            // Iterate through all files and directories of /proc.
+            while ((entry = readdir(procdir)))
+                if (isnumber(entry->d_name))
+                {
+                    int pid;
+                    sscanf(entry->d_name, "%d", &pid);
+                    if (id == ppid(pid))
+                        printf("%d\n", pid);
+                }
+            closedir(procdir);
+        }
+    }
+    return 0;
 }
 
-int isCmd(char *line, char *type)
+int execute(char *args[])
 {
-	char cmd[100];
-	sscanf(line, "%s", cmd);
-	return !strcmp(cmd, type);
+    int pid = fork();
+    if (pid < 0)
+        fprintf(stderr, "Fork Failed");
+    else if (pid == 0) /* child process */
+        execvp(args[0], args);
+    else /* parent process */
+        if (!background)
+            waitpid(pid, NULL, 0);
+    return pid;
 }
+
+/**
+ * Redirects stdin from a file.
+ *
+ * @param fileName the file to redirect from
+ */
+void redirectIn(char *fileName)
+{
+    int in = open(fileName, O_RDONLY);
+    dup2(in, 0);
+    close(in);
+}
+
+/**
+ * Redirects stdout to a file.
+ *
+ * @param fileName the file to redirect to
+ */
+void redirectOut(char *fileName)
+{
+    int out = open(fileName, O_WRONLY | O_TRUNC | O_CREAT, 0600);
+    dup2(out, 1);
+    close(out);
+}
+
 int isBuiltin(char *line)
 {
-	return isCmd(line, "help") || isCmd(line, "cd") || isCmd(line, "echo") || isCmd(line, "record") || isCmd(line, "mypid");
+    return !strcmp(line, "help") || !strcmp(line, "cd") || !strcmp(line, "echo") || !strcmp(line, "record") || !strcmp(line, "mypid") || !strcmp(line, "replay");
 }
 
-int execCmd(char *line)
+int runBuiltin(char *args[])
 {
-	// note that line is modified. no new strings are initialized
-	char *args[100] = {strtok(line, " ")};
-	int n = 0;
-	while (args[n] != NULL)
-		args[++n] = strtok(NULL, " ");
-	int pid;
-	if (pid = fork())
-	{
-		if (!background)
-			waitpid(pid, NULL, 0);
-	}
-	else
-		execvp(args[0], args);
-	return pid;
+    if (!strcmp(args[0], "help"))
+        return help(args);
+    else if (!strcmp(args[0], "cd"))
+        return cd(args);
+    else if (!strcmp(args[0], "echo"))
+        return echo(args);
+    else if (!strcmp(args[0], "record"))
+        return record(args);
+    else if (!strcmp(args[0], "mypid"))
+        return mypid(args);
 }
 
-// pass function pointer to run builtin function
-int execute(int (*fptr)(char *), char *line, int in, int out)
+/**
+ * Runs a command.
+ *
+ * @param *args[] the args to run
+ */
+int run(char *args[])
 {
-	int oldIn = dup(STDIN_FILENO), oldOut = dup(STDOUT_FILENO);
-	// redirect to new io
-	dup2(in, 0);
-	dup2(out, 1);
-	int ret = fptr(line);
-	// restore to old io
-	dup2(oldIn, 0);
-	dup2(oldOut, 1);
-	close(out);
-	return ret;
+    int ret;
+    if (isBuiltin(args[0]))
+        if (background)
+        {
+            ret = fork();
+            if (ret == 0)
+            {
+                runBuiltin(args);
+                exit(0);
+            }
+        }
+        else
+            runBuiltin(args);
+    else
+        ret = execute(args);
+    redirectIn("/dev/tty");
+    redirectOut("/dev/tty");
+    return ret;
 }
 
-int redirector(int (*fptr)(char *), char *line, int in, int out)
+/**
+ * Creates a pipe.
+ *
+ * @param args [description]
+ */
+void createPipe(char *args[])
 {
-	int oldIn = dup(STDIN_FILENO), oldOut = dup(STDOUT_FILENO);
-	// redirect to new io
-	dup2(in, 0);
-	dup2(out, 1);
-	int cin = dup(STDIN_FILENO), cout = dup(STDOUT_FILENO);
-	char *outfile, *infile;
-	// scan for redirect out and modify line
-	if (outfile = strstr(line, " > "))
-	{
-		*outfile = '\0';
-		FILE *out = fopen(outfile + 3, "w");
-		dup2(fileno(out), STDOUT_FILENO);
-	}
-	// scan for redirect in and modify line
-	if (infile = strstr(line, " < "))
-	{
-		*infile = '\0';
-		FILE *in = fopen(infile + 3, "r");
-		dup2(fileno(in), STDIN_FILENO);
-	}
-	int ret = fptr(line);
-	dup2(cin, 0);
-	dup2(cout, 1);
-	// restore to old io
-	dup2(oldIn, 0);
-	dup2(oldOut, 1);
-	close(out);
-	return ret;
+    int fd[2];
+    pipe(fd);
+
+    dup2(fd[1], 1);
+    close(fd[1]);
+
+    printf("args = %s\n", *args);
+
+    run(args);
+
+    dup2(fd[0], 0);
+    close(fd[0]);
 }
 
-int switcher(int (*exec)(), char *line, int in, int out)
+void runline(char *line)
 {
-	if (isCmd(line, "help"))
-		return exec(help, line, in, out);
-	else if (isCmd(line, "cd"))
-		return exec(cd, line, in, out);
-	else if (isCmd(line, "echo"))
-		return exec(echo, line, in, out);
-	else if (isCmd(line, "record"))
-		return exec(record, line, in, out);
-	else if (isCmd(line, "mypid"))
-		return exec(mypid, line, in, out);
-	else
-		return exec(execCmd, line, in, out);
-}
-
-void piper(char *line)
-{
-	int background = line[strlen(line) - 1] == '&';
-	if (background)
-		line[strlen(line) - 2] = '\0';
-	// record
-	strcpy(last16[end % 16], line);
-	end = (end + 1) % 16;
-	char *args[100] = {line};
-	int n = 0;
-	// note that we are modifying line. This is basically handmade strtok.
-	while (args[++n] = strstr(args[n], " | "))
-	{
-		*args[n] = '\0';
-		args[n] += 3;
-	}
-
-	// restore STDIN to its default after this
-	int cin = dup(0);
-	// the ith command reads from 2*i, writes to 2*i+3
-	int i = 1, fd[2 * n + 2];
-	for (; i < n; ++i)
-		pipe(&fd[2 * i]);
-	fd[0] = STDIN_FILENO;
-	fd[2 * n + 1] = dup(1);
-
-	for (i = 0; i < n; ++i)
-		if (i != (n - 1))
-			if (i)
-				switcher(execute, args[i], fd[2 * i], fd[2 * i + 3]);
-			else
-				switcher(redirector, args[i], fd[2 * i], fd[2 * i + 3]);
-		else
-			switcher(redirector, args[i], fd[2 * i], fd[2 * i + 3]);
-	dup2(cin, STDIN_FILENO);
+    if (line[strlen(line) - 1] == '&')
+    {
+        background = 1;
+        line[strlen(line) - 1] = '\0';
+    }
+    // record
+    strcpy(last16[end % 16], line);
+    end = (end + 1) % 16;
+    char *args[MAX_LINE]; // command line arguments
+    char *arg = strtok(line, " ");
+    int i = 0;
+    while (arg)
+    {
+        if (*arg == '<')
+            redirectIn(strtok(NULL, " "));
+        else if (*arg == '>')
+            redirectOut(strtok(NULL, " "));
+        else if (*arg == '|')
+        {
+            args[i] = NULL;
+            createPipe(args);
+            i = 0;
+        }
+        else
+        {
+            args[i] = arg;
+            i++;
+        }
+        arg = strtok(NULL, " ");
+    }
+    args[i] = NULL;
+    if (background)
+        printf("%d\n", run(args));
+    else
+        run(args);
 }
 
 void replay(char *line)
 {
-	int id;
-	sscanf(&line[7], "%d", &id);
-	--id;
-	if (id > -1 && id < 16 && id < end)
-		if (!isBlank(last16[id]))
-			return piper(last16[id]);
-	printf("wrong args\n");
+    int id;
+    sscanf(&line[7], "%d", &id);
+    --id;
+    if (id > -1 && id < 16 && id < end)
+        if (!isBlank(last16[id]))
+        {
+            char cmdcpy[MAX_LINE];
+            strcpy(cmdcpy, last16[id]);
+            return runline(cmdcpy);
+        }
+    printf("wrong args\n");
 }
-int main()
+
+/**
+ * Runs a basic shell.
+ *
+ * @return 0 upon completion
+ */
+int main(void)
 {
-	int i;
-	for (i = 0; i < 16; ++i)
-	{
-		last16[i] = malloc(100);
-		last16[i][0] = '\0';
-	}
+    int i;
+    for (i = 0; i < 16; ++i)
+    {
+        last16[i] = malloc(MAX_LINE);
+        last16[i][0] = '\0';
+    }
+    printf("========\nMY SHELL\n========\n");
+    while (1)
+    {
+        printf(">>> $");
+        fflush(stdout);
 
-	printf("========\nMY SHELL\n========\n");
-	char line[100];
-	while (1)
-	{
-		printf(">>> $");
-		fgets(line, 100, stdin);
-		while (isspace(line[strlen(line) - 1]))
-			line[strlen(line) - 1] = '\0';
-		if (isBlank(line) == 1)
-			continue;
+        char line[MAX_LINE];
+        fgets(line, MAX_LINE, stdin);
+        while (isspace(line[strlen(line) - 1]))
+            line[strlen(line) - 1] = '\0';
 
-		if (isCmd(line, "replay"))
-			replay(line);
-		else if (isCmd(line, "exit"))
-			return printf("bye\n");
-		else
-			piper(line);
-	}
-	return 0;
+        if (isBlank(line) == 1)
+            continue;
+
+        background = line[strlen(line) - 1] == '&';
+
+        char firstCmd[MAX_LINE];
+        sscanf(line, "%s", firstCmd);
+
+        if (!strcmp(firstCmd, "replay"))
+            if (background)
+            {
+                int pid = fork();
+                if (pid == 0)
+                {
+                    replay(line);
+                    exit(0);
+                }
+                printf("%d\n", pid);
+            }
+            else
+                replay(line);
+        else if (!strcmp(firstCmd, "exit"))
+        {
+            printf("byebye\n");
+            return 0;
+        }
+        else
+            runline(line);
+        background = 0;
+    }
+    return 0;
 }
