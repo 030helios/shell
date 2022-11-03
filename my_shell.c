@@ -173,37 +173,34 @@ void piper(char *line)
 	char *args[100] = {line};
 	int n = 0;
 	// note that we are modifying line. This is basically handmade strtok.
-	while (args[++n] = strstr(&line[n], " | "))
+	while (args[++n] = strstr(args[n], " | "))
 	{
 		*args[n] = '\0';
 		args[n] += 3;
 	}
+	int j = 0;
+	for (; j < n; ++j)
+		printf("%s\n", args[j]);
 
 	// restore STDIO to its default after this
 	int cin = dup(0), cout = dup(1);
 	int i = 0, fd[2 * (n - 1)];
 	for (; i < n; ++i)
-	{
-		// make two pipe if this command is not the last one
-		// the ith command generates fd[2*i] and fd[2*i+1]
-		if (i != (n - 1))
+		if (i != (n - 1)) // the ith command pipes fd[2*i] and fd[2*i+1]
 		{
 			pipe(&fd[2 * i]);
 			dup2(fd[2 * i + 1], STDOUT_FILENO);
 			execute(args[i]);
+			// close the output so that the next command doesn't hold
 			close(fd[2 * i + 1]);
 			dup2(fd[2 * i], STDIN_FILENO);
 		}
-		else
+		else // the last command restores STDIO to its default
 		{
-			dup2(cout, 1);
+			dup2(cout, STDOUT_FILENO);
 			execute(args[i]);
-			dup2(cin, 0);
+			dup2(cin, STDIN_FILENO);
 		}
-		// the first command doesn't read from a pipe, so there's nothing to close
-		if (i != 0)
-			close(fd[2 * i - 2]);
-	}
 }
 
 void replay(char *line)
