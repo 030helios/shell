@@ -64,7 +64,6 @@ void record(char *line)
 		if (!isBlank(last16[i % 16]))
 			printf("%d: %s\n", j++, last16[i % 16]);
 }
-
 int ppid(int pid)
 {
 	int ppid;
@@ -144,43 +143,39 @@ int isCmd(char *line, char *type)
 	sscanf(line, "%s", cmd);
 	return !strcmp(cmd, type);
 }
-
 int isBuiltin(char *line)
 {
 	return isCmd(line, "help") || isCmd(line, "cd") || isCmd(line, "echo") || isCmd(line, "record") || isCmd(line, "mypid");
 }
 
-void execute(char *line)
+void execCmd(char *line)
 {
-	// a copy of line for strtok
-	char tokenizedLine[100];
-	strcpy(tokenizedLine, line);
-	// the arguments of line including operators
-	// no new strings are initialized
-	char *args[100] = {NULL};
-	args[0] = strtok(tokenizedLine, " ");
+	// note that line is modified. no new strings are initialized
+	char *args[100] = {strtok(line, " ")};
 	int n = 0;
 	while (args[n] != NULL)
 		args[++n] = strtok(NULL, " ");
+	int pid;
+	if (pid = fork())
+		waitpid(pid, NULL, 0);
+	else
+		execvp(args[0], args);
+}
 
-	if (!strcmp(args[0], "help"))
+void execute(char *line)
+{
+	if (isCmd(line, "help"))
 		help(line);
-	else if (!strcmp(args[0], "cd"))
+	else if (isCmd(line, "cd"))
 		cd(line);
-	else if (!strcmp(args[0], "echo"))
+	else if (isCmd(line, "echo"))
 		echo(line);
-	else if (!strcmp(args[0], "record"))
+	else if (isCmd(line, "record"))
 		record(line);
-	else if (!strcmp(args[0], "mypid"))
+	else if (isCmd(line, "mypid"))
 		mypid(line);
 	else
-	{
-		int pid;
-		if (pid = fork())
-			waitpid(pid, NULL, 0);
-		else
-			execvp(args[0], args);
-	}
+		execCmd(line);
 }
 
 void redirector(char *line)
