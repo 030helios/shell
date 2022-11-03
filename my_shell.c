@@ -10,12 +10,11 @@
 #include <dirent.h>
 #include <sys/wait.h>
 
-// Terminate if this process is forked
-int isOriginalProcess = 1;
+int background = 0;
 
-void help(char *line)
+int help(char *line)
 {
-	printf("----------------------------------------------------------\n\
+	return printf("----------------------------------------------------------\n\
 			my little shell\n\
 			Type program names and arguments and hit enter\n\n\
 			The following are built in:\n\
@@ -30,13 +29,13 @@ void help(char *line)
 			----------------------------------------------------------\n\
 			");
 }
-void cd(char *line)
+int cd(char *line)
 {
 	char dir[100];
 	sscanf(&line[3], "%s", dir);
-	chdir(dir);
+	return chdir(dir);
 }
-void echo(char *line)
+int echo(char *line)
 {
 	char flag[100];
 	sscanf(&line[5], "%s", flag);
@@ -44,6 +43,7 @@ void echo(char *line)
 		printf("%s", &line[8]);
 	else
 		printf("%s\n", &line[5]);
+	return 0;
 }
 int isBlank(char *line)
 {
@@ -55,7 +55,7 @@ int isBlank(char *line)
 }
 int end = 0;
 char *last16[16];
-void record(char *line)
+int record(char *line)
 {
 	printf("history cmd:\n");
 	int i = end;
@@ -63,6 +63,7 @@ void record(char *line)
 	for (; i < end + 16; ++i)
 		if (!isBlank(last16[i % 16]))
 			printf("%d: %s\n", j++, last16[i % 16]);
+	return 0;
 }
 int ppid(int pid)
 {
@@ -107,7 +108,7 @@ int isnumber(char *p)
 			return 0;
 	return 1;
 }
-void mypid(char *line)
+int mypid(char *line)
 {
 	char flag[100];
 	sscanf(&line[5], "%s", flag);
@@ -135,6 +136,7 @@ void mypid(char *line)
 			closedir(procdir);
 		}
 	}
+	return 0;
 }
 
 int isCmd(char *line, char *type)
@@ -148,7 +150,7 @@ int isBuiltin(char *line)
 	return isCmd(line, "help") || isCmd(line, "cd") || isCmd(line, "echo") || isCmd(line, "record") || isCmd(line, "mypid");
 }
 
-void execCmd(char *line)
+int execCmd(char *line)
 {
 	// note that line is modified. no new strings are initialized
 	char *args[100] = {strtok(line, " ")};
@@ -157,26 +159,31 @@ void execCmd(char *line)
 		args[++n] = strtok(NULL, " ");
 	int pid;
 	if (pid = fork())
-		waitpid(pid, NULL, 0);
+	{
+		if (!background)
+			waitpid(pid, NULL, 0);
+	}
 	else
 		execvp(args[0], args);
+	return pid;
 }
 
 // pass function pointer to run builtin function
-void execute(void (*fptr)(char *), char *line, int in, int out)
+int execute(int (*fptr)(char *), char *line, int in, int out)
 {
 	int oldIn = dup(STDIN_FILENO), oldOut = dup(STDOUT_FILENO);
 	// redirect to new io
 	dup2(in, 0);
 	dup2(out, 1);
-	fptr(line);
+	int ret = fptr(line);
 	// restore to old io
 	dup2(oldIn, 0);
 	dup2(oldOut, 1);
 	close(out);
+	return ret;
 }
 
-void redirector(void (*fptr)(char *), char *line, int in, int out)
+int redirector(int (*fptr)(char *), char *line, int in, int out)
 {
 	int oldIn = dup(STDIN_FILENO), oldOut = dup(STDOUT_FILENO);
 	// redirect to new io
@@ -198,29 +205,30 @@ void redirector(void (*fptr)(char *), char *line, int in, int out)
 		FILE *in = fopen(infile + 3, "r");
 		dup2(fileno(in), STDIN_FILENO);
 	}
-	fptr(line);
+	int ret = fptr(line);
 	dup2(cin, 0);
 	dup2(cout, 1);
 	// restore to old io
 	dup2(oldIn, 0);
 	dup2(oldOut, 1);
 	close(out);
+	return ret;
 }
 
-void switcher(void (*exec)(), char *line, int in, int out)
+int switcher(int (*exec)(), char *line, int in, int out)
 {
 	if (isCmd(line, "help"))
-		exec(help, line, in, out);
+		return exec(help, line, in, out);
 	else if (isCmd(line, "cd"))
-		exec(cd, line, in, out);
+		return exec(cd, line, in, out);
 	else if (isCmd(line, "echo"))
-		exec(echo, line, in, out);
+		return exec(echo, line, in, out);
 	else if (isCmd(line, "record"))
-		exec(record, line, in, out);
+		return exec(record, line, in, out);
 	else if (isCmd(line, "mypid"))
-		exec(mypid, line, in, out);
+		return exec(mypid, line, in, out);
 	else
-		exec(execCmd, line, in, out);
+		return exec(execCmd, line, in, out);
 }
 
 void piper(char *line)
@@ -281,7 +289,7 @@ int main()
 
 	printf("========\nMY SHELL\n========\n");
 	char line[100];
-	while (isOriginalProcess)
+	while (1)
 	{
 		printf(">>> $");
 		fgets(line, 100, stdin);
