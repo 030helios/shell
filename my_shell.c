@@ -162,24 +162,26 @@ void execCmd(char *line)
 		execvp(args[0], args);
 }
 
-void execute(char *line)
+// pass function pointer to run builtin function
+void execute(void (*fptr)(char *), char *line, int in, int out)
 {
-	if (isCmd(line, "help"))
-		help(line);
-	else if (isCmd(line, "cd"))
-		cd(line);
-	else if (isCmd(line, "echo"))
-		echo(line);
-	else if (isCmd(line, "record"))
-		record(line);
-	else if (isCmd(line, "mypid"))
-		mypid(line);
-	else
-		execCmd(line);
+	int oldIn = dup(STDIN_FILENO), oldOut = dup(STDOUT_FILENO);
+	// redirect to new io
+	dup2(in, 0);
+	dup2(out, 1);
+	fptr(line);
+	// restore to old io
+	dup2(oldIn, 0);
+	dup2(oldOut, 1);
+	close(out);
 }
 
-void redirector(char *line)
+void redirector(void (*fptr)(char *), char *line, int in, int out)
 {
+	int oldIn = dup(STDIN_FILENO), oldOut = dup(STDOUT_FILENO);
+	// redirect to new io
+	dup2(in, 0);
+	dup2(out, 1);
 	int cin = dup(STDIN_FILENO), cout = dup(STDOUT_FILENO);
 	char *outfile, *infile;
 	// scan for redirect out and modify line
@@ -196,9 +198,13 @@ void redirector(char *line)
 		FILE *in = fopen(infile + 3, "r");
 		dup2(fileno(in), STDIN_FILENO);
 	}
-	execute(line);
+	fptr(line);
 	dup2(cin, 0);
 	dup2(cout, 1);
+	// restore to old io
+	dup2(oldIn, 0);
+	dup2(oldOut, 1);
+	close(out);
 }
 
 void piper(char *line)
@@ -219,20 +225,54 @@ void piper(char *line)
 		if (i != (n - 1)) // the ith command pipes fd[2*i] and fd[2*i+1]
 		{
 			pipe(&fd[2 * i]);
-			dup2(fd[2 * i + 1], STDOUT_FILENO);
 			// try redirect if we are processing args[0]
 			if (i)
-				execute(args[i]);
+			{
+				if (isCmd(args[i], "help"))
+					execute(help, args[i], 0, fd[2 * i + 1]);
+				else if (isCmd(args[i], "cd"))
+					execute(cd, args[i], 0, fd[2 * i + 1]);
+				else if (isCmd(args[i], "echo"))
+					execute(echo, args[i], 0, fd[2 * i + 1]);
+				else if (isCmd(args[i], "record"))
+					execute(record, args[i], 0, fd[2 * i + 1]);
+				else if (isCmd(args[i], "mypid"))
+					execute(mypid, args[i], 0, fd[2 * i + 1]);
+				else
+					execute(execCmd, args[i], 0, fd[2 * i + 1]);
+			}
 			else
-				redirector(args[0]);
-			// close the output so that the next command doesn't hold
-			close(fd[2 * i + 1]);
+			{
+				if (isCmd(args[i], "help"))
+					redirector(help, args[i], 0, fd[2 * i + 1]);
+				else if (isCmd(args[i], "cd"))
+					redirector(cd, args[i], 0, fd[2 * i + 1]);
+				else if (isCmd(args[i], "echo"))
+					redirector(echo, args[i], 0, fd[2 * i + 1]);
+				else if (isCmd(args[i], "record"))
+					redirector(record, args[i], 0, fd[2 * i + 1]);
+				else if (isCmd(args[i], "mypid"))
+					redirector(mypid, args[i], 0, fd[2 * i + 1]);
+				else
+					redirector(execCmd, args[i], 0, fd[2 * i + 1]);
+			}
 			dup2(fd[2 * i], STDIN_FILENO);
 		}
 		else // the last command restores STDIO to its default
 		{
 			dup2(cout, STDOUT_FILENO);
-			redirector(args[i]);
+			if (isCmd(args[i], "help"))
+				redirector(help, args[i], 0, fd[2 * i + 1]);
+			else if (isCmd(args[i], "cd"))
+				redirector(cd, args[i], 0, fd[2 * i + 1]);
+			else if (isCmd(args[i], "echo"))
+				redirector(echo, args[i], 0, fd[2 * i + 1]);
+			else if (isCmd(args[i], "record"))
+				redirector(record, args[i], 0, fd[2 * i + 1]);
+			else if (isCmd(args[i], "mypid"))
+				redirector(mypid, args[i], 0, fd[2 * i + 1]);
+			else
+				redirector(execCmd, args[i], 0, fd[2 * i + 1]);
 			dup2(cin, STDIN_FILENO);
 		}
 }
@@ -244,7 +284,7 @@ void replay(char *line)
 	--id;
 	if (id > -1 && id < 16 && id < end)
 		if (!isBlank(last16[id]))
-			return execute(last16[id]);
+			return piper(last16[id]);
 	printf("wrong args\n");
 }
 int main()
