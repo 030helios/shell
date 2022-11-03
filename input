@@ -1,0 +1,21 @@
+cat < text.txt | head -4 | tail -3 | grep os > pipeout.txt &
+cat < text.txt
+cat pipeout.txt
+help
+pwd
+cd ..
+pwd
+cd test_dir
+pwd
+echo 123 456
+echo -n 123 456
+echo -n -n -n
+echo enough
+record
+echo hi
+record
+replay 4
+record
+mypid -i
+record | head -c 32 > t2.txt &
+cat < t1.txt | head -5 | tail -3 | grep pid > t2.txt &

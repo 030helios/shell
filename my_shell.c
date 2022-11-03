@@ -17,19 +17,18 @@ int background = 0;
 int help(char *args[])
 {
     return printf("----------------------------------------------------------\n\
-			my little shell\n\
-			Type program names and arguments and hit enter\n\n\
-			The following are built in:\n\
-			1: help		show all built-in function info\n\
-			2: cd		change directory\n\
-			3: echo		echo the strings to standard output\n\
-			4: record	show last-16 cmds you typed in\n\
-			5: replay	re-execute the cmd showed in record\n\
-			6: mypid	find and print process-ids\n\
-			7: exit		exit shell\n\n\
-			Use the \"man\" command for information on other programs.\n\
-			----------------------------------------------------------\n\
-			");
+my little shell\n\
+Type program names and arguments and hit enter\n\n\
+The following are built in:\n\
+1: help		show all built-in function info\n\
+2: cd		change directory\n\
+3: echo		echo the strings to standard output\n\
+4: record	show last-16 cmds you typed in\n\
+5: replay	re-execute the cmd showed in record\n\
+6: mypid	find and print process-ids\n\
+7: exit		exit shell\n\n\
+Use the \"man\" command for information on other programs.\n\
+----------------------------------------------------------\n");
 }
 int cd(char *args[])
 {
@@ -241,25 +240,27 @@ void createPipe(char *args[])
     dup2(fd[1], 1);
     close(fd[1]);
 
-    printf("args = %s\n", *args);
-
     run(args);
 
     dup2(fd[0], 0);
     close(fd[0]);
 }
 
-void runline(char *line)
+void runline(char *originalLine)
 {
+    char line[MAX_LINE];
+    strcpy(line, originalLine);
+    // record
+    strcpy(last16[end % 16], line);
+    end = (end + 1) % 16;
+    // handle background
     if (line[strlen(line) - 1] == '&')
     {
         background = 1;
         line[strlen(line) - 1] = '\0';
     }
-    // record
-    strcpy(last16[end % 16], line);
-    end = (end + 1) % 16;
-    char *args[MAX_LINE]; // command line arguments
+    // command line arguments
+    char *args[MAX_LINE];
     char *arg = strtok(line, " ");
     int i = 0;
     while (arg)
@@ -293,13 +294,9 @@ void replay(char *line)
     int id;
     sscanf(&line[7], "%d", &id);
     --id;
-    if (id > -1 && id < 16 && id < end)
+    if (id > -1 && id < 16)
         if (!isBlank(last16[id]))
-        {
-            char cmdcpy[MAX_LINE];
-            strcpy(cmdcpy, last16[id]);
-            return runline(cmdcpy);
-        }
+            return runline(last16[id]);
     printf("wrong args\n");
 }
 
