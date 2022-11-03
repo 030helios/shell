@@ -209,6 +209,12 @@ void redirector(void (*fptr)(char *), char *line, int in, int out)
 
 void piper(char *line)
 {
+	int background = line[strlen(line) - 1] == '&';
+	if (background)
+		line[strlen(line) - 2] = '\0';
+	// record
+	strcpy(last16[end % 16], line);
+	end = (end + 1) % 16;
 	char *args[100] = {line};
 	int n = 0;
 	// note that we are modifying line. This is basically handmade strtok.
@@ -227,7 +233,7 @@ void piper(char *line)
 
 	for (i = 0; i < n; ++i)
 		if (i != (n - 1))
-		{
+				{
 			// try redirect if we are processing args[0]
 			if (i)
 			{
@@ -243,8 +249,8 @@ void piper(char *line)
 					execute(mypid, args[i], fd[2 * i - 2], fd[2 * i + 1]);
 				else
 					execute(execCmd, args[i], fd[2 * i - 2], fd[2 * i + 1]);
-			}
-			else
+				}
+				else
 			{
 				if (isCmd(args[i], "help"))
 					redirector(help, args[i], 0, fd[2 * i + 1]);
@@ -256,21 +262,21 @@ void piper(char *line)
 					redirector(record, args[i], 0, fd[2 * i + 1]);
 				else if (isCmd(args[i], "mypid"))
 					redirector(mypid, args[i], 0, fd[2 * i + 1]);
-				else
+			else
 					redirector(execCmd, args[i], 0, fd[2 * i + 1]);
-			}
+		}
 		}
 		else // the last command restores STDIO to its default
 		{
-			if (isCmd(args[i], "help"))
+		if (isCmd(args[i], "help"))
 				redirector(help, args[i], fd[2 * i - 2], cout);
-			else if (isCmd(args[i], "cd"))
+		else if (isCmd(args[i], "cd"))
 				redirector(cd, args[i], fd[2 * i - 2], cout);
-			else if (isCmd(args[i], "echo"))
+		else if (isCmd(args[i], "echo"))
 				redirector(echo, args[i], fd[2 * i - 2], cout);
-			else if (isCmd(args[i], "record"))
+		else if (isCmd(args[i], "record"))
 				redirector(record, args[i], fd[2 * i - 2], cout);
-			else if (isCmd(args[i], "mypid"))
+		else if (isCmd(args[i], "mypid"))
 				redirector(mypid, args[i], fd[2 * i - 2], cout);
 			else
 				redirector(execCmd, args[i], fd[2 * i - 2], cout);
