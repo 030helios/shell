@@ -168,6 +168,29 @@ void execute(char *line)
 	}
 }
 
+void redirector(char *line)
+{
+	int cin = dup(STDIN_FILENO), cout = dup(STDOUT_FILENO);
+	char *outfile, *infile;
+	// scan for redirect out and modify line
+	if (outfile = strstr(line, " > "))
+	{
+		*outfile = '\0';
+		FILE *out = fopen(outfile + 3, "w");
+		dup2(fileno(out), STDOUT_FILENO);
+	}
+	// scan for redirect in and modify line
+	if (infile = strstr(line, " < "))
+	{
+		*infile = '\0';
+		FILE *in = fopen(infile + 3, "r");
+		dup2(fileno(in), STDIN_FILENO);
+	}
+	execute(line);
+	dup2(cin, 0);
+	dup2(cout, 1);
+}
+
 void piper(char *line)
 {
 	char *args[100] = {line};
@@ -178,9 +201,6 @@ void piper(char *line)
 		*args[n] = '\0';
 		args[n] += 3;
 	}
-	int j = 0;
-	for (; j < n; ++j)
-		printf("%s\n", args[j]);
 
 	// restore STDIO to its default after this
 	int cin = dup(0), cout = dup(1);
@@ -190,7 +210,11 @@ void piper(char *line)
 		{
 			pipe(&fd[2 * i]);
 			dup2(fd[2 * i + 1], STDOUT_FILENO);
-			execute(args[i]);
+			// try redirect if we are processing args[0]
+			if (i)
+				execute(args[i]);
+			else
+				redirector(args[0]);
 			// close the output so that the next command doesn't hold
 			close(fd[2 * i + 1]);
 			dup2(fd[2 * i], STDIN_FILENO);
@@ -198,7 +222,7 @@ void piper(char *line)
 		else // the last command restores STDIO to its default
 		{
 			dup2(cout, STDOUT_FILENO);
-			execute(args[i]);
+			redirector(args[i]);
 			dup2(cin, STDIN_FILENO);
 		}
 }
